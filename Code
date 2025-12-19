@@ -1,0 +1,292 @@
+#include <algorithm>
+#include <cctype>
+#include <chrono>
+#include <iomanip>
+#include <iostream>
+#include <random>
+#include <string>
+#include <vector>
+#include <cstdlib>  
+#include <ctime>    
+
+
+using namespace std;
+// Card struct
+struct Card {
+  int suit; // 0= Clubs, 1= Diamonds, 2= Hearts, 3= Spades
+  int rank; // 0-13 (1= Ace, 11= Jack, 12= Queen, 13= King)
+};
+
+// Deck of cards
+using Deck = vector<Card>;
+
+Deck createDeck() {
+  Deck deck;
+  // suits
+  for (int suit = 0; suit < 4; suit++) {
+    // ranks
+    for (int rank = 1; rank <= 13; rank++) {
+      // instance of card
+      Card c;
+      c.suit = suit;
+      c.rank = rank;
+      deck.push_back(c);
+    }
+  }
+  return deck;
+}
+
+string rankToChar(int rank) {
+  if (rank == 1)
+    return "A";
+  else if (rank == 11)
+    return "J";
+  else if (rank == 12)
+    return "Q";
+  else if (rank == 13)
+    return "K";
+  else
+    return to_string(rank);
+}
+
+string suitToChar(int suit) {
+  switch (suit) {
+  case 0:
+    return "C";
+  case 1:
+    return "D";
+  case 2:
+    return "H";
+  case 3:
+    return "S";
+  default:
+    return "?";
+  }
+}
+
+string cardToString(Card card) {
+  return rankToChar(card.rank) + suitToChar(card.suit);
+}
+// passes deck by reference
+// shuffle deck w/Mersenne Twister engine
+void shuffleDeck(Deck &deck) {
+  for (int i = (int)deck.size() - 1; i > 0; --i) {
+    int j = rand() % (i + 1);   // 0..i
+    swap(deck[i], deck[j]);
+  }
+}
+
+
+Card dealCard(Deck &deck) {
+  Card c = deck.back();
+  deck.pop_back();
+  return c;
+}
+// assigns values to cards
+int cardValue(Card c) {
+  switch (c.rank) {
+  case 1: // Ace
+    return 11;
+  case 11: // Jack
+  case 12: // Queen
+  case 13: // King
+    return 10;
+  default: // 2–10
+    return c.rank;
+  }
+}
+
+// total value of hand
+int handTotal(const vector<Card> &hand) {
+  int total = 0;
+  for (int i = 0; i < hand.size(); i++) {
+    total += cardValue(hand[i]);
+  }
+  return total;
+}
+
+// estimates player winning probability if standing w/ current hand
+double estimateWinProbability(Deck deck, const vector<Card> &playerHand,
+                              const vector<Card> &dealerHand, int numSim) {
+  int wins = 0;
+  int ties = 0;
+
+  for (int i = 0; i < numSim; i++) {
+    // copy deck and hands 
+    Deck simDeck = deck;
+    shuffleDeck(simDeck); // reshuffle remaining cards
+
+    vector<Card> simPlayer = playerHand;
+    vector<Card> simDealer = dealerHand;
+
+    int playerTotal = handTotal(simPlayer);
+    int dealerTotal = handTotal(simDealer);
+
+    if (playerTotal > 21) {
+      continue;
+    }
+
+    while (dealerTotal < 17 && !simDeck.empty()) {
+      Card c = dealCard(simDeck);
+      simDealer.push_back(c);
+      dealerTotal = handTotal(simDealer);
+    }
+
+    if (dealerTotal > 21) {
+      wins++;
+    } else if (playerTotal > dealerTotal) {
+      wins++;
+    } else if (playerTotal == dealerTotal) {
+      ties++;
+    }
+  }
+
+  // count tie as half win
+  double winScore = wins + 0.5 * ties;
+  double prob = (winScore / numSim) * 100.0;
+  return prob;
+}
+
+int main() {
+  srand((unsigned)time(NULL));
+  cout << "Blackjack Game is starting. . .\n\n";
+  // create deck
+  Deck deck = createDeck();
+  // shuffle deck
+  shuffleDeck(deck);
+  // deal cards to player and dealer
+  Card playerCard1 = dealCard(deck);
+  Card playerCard2 = dealCard(deck);
+  Card dealerCard1 = dealCard(deck);
+  Card dealerCard2 = dealCard(deck);
+
+  // put cards into hands
+  vector<Card> playerHand = {playerCard1, playerCard2};
+  vector<Card> dealerHand = {dealerCard1, dealerCard2};
+
+  // output hand totals using handTotal function
+  int playerTotal = handTotal(playerHand);
+  int dealerTotal = handTotal(dealerHand);
+
+  cout << "Player's total: " << playerTotal << "\n";
+  cout << "Dealer's total: " << dealerTotal << "\n\n";
+
+  // calc win probability before any hit (standing w/ current hand)
+  double winProb = estimateWinProbability(deck, playerHand, dealerHand, 400);
+  cout << fixed << setprecision(1);
+  cout << "Estimated win probability (stand now): " << winProb << "%\n\n";
+
+  cout << "----------------------\n";
+  cout << "starting hands:\n\n";
+
+  // output player's hand w/ vector
+  cout << "Player's hand: ";
+  for (const auto &card : playerHand) {
+    cout << cardToString(card) << " ";
+  }
+  cout << "\n";
+
+  // output dealer's hand w/ vector
+  cout << "Dealer's hand: ";
+  for (const auto &card : dealerHand) {
+    cout << cardToString(card) << " ";
+  }
+  cout << "\n\n";
+
+  // player hit stand loop
+  cout << "----------------------\n";
+  cout << "player action:\n\n";
+
+  char choice;
+  bool playerBust = false;
+  while (true) {
+    cout << "Do you want to hit or stand? (H/S): ";
+    cin >> choice;
+    cout << "\n";
+    choice = toupper(choice);
+
+    if (choice == 'H') {
+      Card newCard = dealCard(deck);
+      playerHand.push_back(newCard);
+
+      cout << "You drew: " << cardToString(newCard) << "\n";
+
+      // update player's total
+      playerTotal = handTotal(playerHand);
+      cout << "Players Hand: ";
+      for (const auto &card : playerHand) {
+        cout << cardToString(card) << " ";
+      }
+      cout << "\n";
+      cout << "Player's total: " << playerTotal << "\n\n";
+
+      // update win probability after hit
+      winProb = estimateWinProbability(deck, playerHand, dealerHand, 400);
+      cout << "Estimated win probability (stand now): " << winProb << "%\n\n";
+
+      // check if player busts
+      if (playerTotal > 21) {
+        cout << "Player busts! Dealer wins.\n";
+        playerBust = true;
+        break;
+      }
+    } else if (choice == 'S') {
+      cout << "You stand with a total of: " << playerTotal << "\n\n";
+      break;
+    } else {
+      cout << "Invalid input. Please enter 'H' or 'S'.\n\n";
+    }
+  }
+  if (playerBust) {
+    return 0;
+  }
+
+  // dealer's turn
+  cout << "----------------------\n";
+  cout << "Dealer's turn:\n";
+  cout << "Dealer's current hand: " << cardToString(dealerCard1) << " "
+       << cardToString(dealerCard2) << "\n";
+  cout << "Dealer's total: " << dealerTotal << "\n\n";
+
+  while (dealerTotal < 17) {
+    Card newCard = dealCard(deck);
+    dealerHand.push_back(newCard);
+
+    cout << "Dealer drew: " << cardToString(newCard) << "\n";
+
+    dealerTotal = handTotal(dealerHand);
+
+    cout << "Dealer's hand: ";
+    for (const auto &card : dealerHand) {
+      cout << cardToString(card) << " ";
+    }
+    cout << "\n";
+
+    cout << "Dealer's total: " << dealerTotal << "\n";
+
+    // update win probability after dealer draws
+    winProb = estimateWinProbability(deck, playerHand, dealerHand, 400);
+    cout << "Your win probability: " << winProb << "%\n\n";
+
+    if (dealerTotal > 21) {
+      cout << "Dealer busts! Player wins.\n";
+      return 0;
+    }
+  }
+
+  // compare final totals
+  cout << "----------------------\n";
+  cout << "Final totals:\n";
+  cout << "Player: " << playerTotal << "\n";
+  cout << "Dealer: " << dealerTotal << "\n\n";
+
+  if (playerTotal > dealerTotal) {
+    cout << "Player wins!\n";
+  } else if (playerTotal < dealerTotal) {
+    cout << "Dealer wins!\n";
+  } else {
+    cout << "It's a tie!\n";
+  }
+
+  return 0;
+}
